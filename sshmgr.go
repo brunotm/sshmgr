@@ -2,10 +2,10 @@
 Package sshmgr is a goroutine safe manager for SSH clients sharing between ssh/sftp sessions
 
 It makes possible to share and reutilize existing client connections
-for the same host `made with the same user and port` between multiple goroutines.
+for the same host `made with the same user and port` between multiple sessions and goroutines.
 
 This is useful when yout application relies on SSH/SFTP for interacting with several
-hosts and not spawn multiple connections to the same hosts saving resources on both sides.
+hosts and not spawn multiple connections to the same hosts, saving resources on both sides.
 
 Clients are reference counted per session, and automatically closed/removed from the manager when all dependent sessions are closed.
 
