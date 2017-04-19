@@ -1,5 +1,6 @@
 Go sshmgr
 ====
+[![Go Report Card](https://goreportcard.com/badge/github.com/brunotm/sshmgr)](https://goreportcard.com/report/github.com/brunotm/sshmgr)
 
 ### A goroutine safe manager for SSH clients sharing between ssh/sftp sessions.
 
