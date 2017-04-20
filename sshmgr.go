@@ -49,7 +49,7 @@ var Manager = NewManager()
 // SSHManager manage ssh clients and sessions.
 // Clients are reference counted per session and removed from manager when the refcount reaches 0
 type SSHManager struct {
-	mtx     *sync.Mutex
+	mtx     *sync.RWMutex
 	locker  *locker.Locker
 	clients map[string]*managedClient
 }
@@ -60,8 +60,12 @@ func (m *SSHManager) GetSSHSession(config *SSHConfig) (*SSHSession, error) {
 	m.locker.Lock(clientName)
 	defer m.locker.Unlock(clientName)
 
+	m.mtx.RLock()
+	client, exists := m.clients[clientName]
+	m.mtx.RUnlock()
+
 	// Found a active client, try to create a new session from it
-	if client := m.clients[clientName]; client != nil {
+	if exists {
 		session, err := client.client.NewSession()
 		if err != nil {
 			return nil, err
@@ -95,8 +99,12 @@ func (m *SSHManager) GetSFTPSession(config *SSHConfig) (*SFTPSession, error) {
 	m.locker.Lock(clientName)
 	defer m.locker.Unlock(clientName)
 
+	m.mtx.RLock()
+	client, exists := m.clients[clientName]
+	m.mtx.RUnlock()
+
 	// Found a active client, try to create a new session from it
-	if client := m.clients[clientName]; client != nil {
+	if exists {
 		session, err := sftp.NewClient(client.client)
 		if err != nil {
 			return nil, err
@@ -128,8 +136,11 @@ func (m *SSHManager) notifySessionClose(clientName string) {
 	m.locker.Lock(clientName)
 	defer m.locker.Unlock(clientName)
 
-	client, ok := m.clients[clientName]
-	if !ok {
+	m.mtx.RLock()
+	client, exists := m.clients[clientName]
+	m.mtx.RUnlock()
+
+	if !exists {
 		// We should never get here
 		panic(fmt.Sprintf("Client not found: %s", clientName))
 	}
@@ -145,5 +156,5 @@ func (m *SSHManager) notifySessionClose(clientName string) {
 
 // NewManager creates a new SSHManager
 func NewManager() *SSHManager {
-	return &SSHManager{&sync.Mutex{}, locker.New(), map[string]*managedClient{}}
+	return &SSHManager{&sync.RWMutex{}, locker.New(), map[string]*managedClient{}}
 }
