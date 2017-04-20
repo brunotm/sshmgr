@@ -51,7 +51,7 @@ var Manager = NewManager()
 type SSHManager struct {
 	mtx     *sync.RWMutex
 	locker  *locker.Locker
-	clients map[string]*managedClient
+	clients map[string]*sshClient
 }
 
 // GetSSHSession creates a session from a active managed client or create a new one on demand
@@ -66,7 +66,7 @@ func (m *SSHManager) GetSSHSession(config *SSHConfig) (*SSHSession, error) {
 
 	// Found a active client, try to create a new session from it
 	if exists {
-		session, err := client.client.NewSession()
+		session, err := client.NewSession()
 		if err != nil {
 			return nil, err
 		}
@@ -75,12 +75,12 @@ func (m *SSHManager) GetSSHSession(config *SSHConfig) (*SSHSession, error) {
 	}
 
 	// Create a new client and session
-	client, err := newManagedClient(config)
+	client, err := newSSHClient(config)
 	if err != nil {
 		return nil, err
 	}
 
-	session, err := client.client.NewSession()
+	session, err := client.NewSession()
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func (m *SSHManager) GetSFTPSession(config *SSHConfig) (*SFTPSession, error) {
 
 	// Found a active client, try to create a new session from it
 	if exists {
-		session, err := sftp.NewClient(client.client)
+		session, err := sftp.NewClient(client.Client)
 		if err != nil {
 			return nil, err
 		}
@@ -114,12 +114,12 @@ func (m *SSHManager) GetSFTPSession(config *SSHConfig) (*SFTPSession, error) {
 	}
 
 	// Create a new client and session
-	client, err := newManagedClient(config)
+	client, err := newSSHClient(config)
 	if err != nil {
 		return nil, err
 	}
 
-	session, err := sftp.NewClient(client.client)
+	session, err := sftp.NewClient(client.Client)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func (m *SSHManager) notifySessionClose(clientName string) {
 	}
 
 	if client.decr() == 0 {
-		defer client.client.Close()
+		defer client.Close()
 		m.mtx.Lock()
 		delete(m.clients, clientName)
 		m.mtx.Unlock()
@@ -156,5 +156,5 @@ func (m *SSHManager) notifySessionClose(clientName string) {
 
 // NewManager creates a new SSHManager
 func NewManager() *SSHManager {
-	return &SSHManager{&sync.RWMutex{}, locker.New(), map[string]*managedClient{}}
+	return &SSHManager{&sync.RWMutex{}, locker.New(), map[string]*sshClient{}}
 }
