@@ -54,18 +54,29 @@ type SSHManager struct {
 	clients map[string]*sshClient
 }
 
+// addClient adds a client to manager client map
+func (m *SSHManager) addClient(clientName string, client *sshClient) {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+	m.clients[clientName] = client
+}
+
+// getClient get a existing client from manager client map
+func (m *SSHManager) getClient(clientName string) *sshClient {
+	m.mtx.RLock()
+	defer m.mtx.RUnlock()
+	return m.clients[clientName]
+}
+
 // GetSSHSession creates a session from a active managed client or create a new one on demand
 func (m *SSHManager) GetSSHSession(config *SSHConfig) (*SSHSession, error) {
 	clientName := fmt.Sprintf("%s@%s:%s", config.User, config.NetAddr, config.Port)
 	m.locker.Lock(clientName)
 	defer m.locker.Unlock(clientName)
 
-	m.mtx.RLock()
-	client, exists := m.clients[clientName]
-	m.mtx.RUnlock()
-
-	// Found a active client, try to create a new session from it
-	if exists {
+	// If a existing client is found try to create a session from it
+	client := m.getClient(clientName)
+	if client != nil {
 		session, err := client.NewSession()
 		if err != nil {
 			return nil, err
@@ -85,10 +96,7 @@ func (m *SSHManager) GetSSHSession(config *SSHConfig) (*SSHSession, error) {
 		return nil, err
 	}
 	client.incr()
-
-	m.mtx.Lock()
-	m.clients[clientName] = client
-	m.mtx.Unlock()
+	m.addClient(clientName, client)
 
 	return &SSHSession{clientName: clientName, manager: m, Session: session}, nil
 }
@@ -99,12 +107,9 @@ func (m *SSHManager) GetSFTPSession(config *SSHConfig) (*SFTPSession, error) {
 	m.locker.Lock(clientName)
 	defer m.locker.Unlock(clientName)
 
-	m.mtx.RLock()
-	client, exists := m.clients[clientName]
-	m.mtx.RUnlock()
-
-	// Found a active client, try to create a new session from it
-	if exists {
+	// If a existing client is found try to create a session from it
+	client := m.getClient(clientName)
+	if client != nil {
 		session, err := sftp.NewClient(client.Client)
 		if err != nil {
 			return nil, err
@@ -124,10 +129,7 @@ func (m *SSHManager) GetSFTPSession(config *SSHConfig) (*SFTPSession, error) {
 		return nil, err
 	}
 	client.incr()
-
-	m.mtx.Lock()
-	m.clients[clientName] = client
-	m.mtx.Unlock()
+	m.addClient(clientName, client)
 
 	return &SFTPSession{clientName: clientName, manager: m, Client: session}, nil
 }
@@ -136,11 +138,9 @@ func (m *SSHManager) notifySessionClose(clientName string) {
 	m.locker.Lock(clientName)
 	defer m.locker.Unlock(clientName)
 
-	m.mtx.RLock()
-	client, exists := m.clients[clientName]
-	m.mtx.RUnlock()
+	client := m.getClient(clientName)
 
-	if !exists {
+	if client == nil {
 		// We should never get here
 		panic(fmt.Sprintf("Client not found: %s", clientName))
 	}
