@@ -43,8 +43,12 @@ import (
 	"github.com/pkg/sftp"
 )
 
+func init() {
+	Manager = NewManager()
+}
+
 // Manager is the package default ssh manager
-var Manager = NewManager()
+var Manager *SSHManager
 
 // SSHManager manage ssh clients and sessions.
 // Clients are reference counted per session and removed from manager when the refcount reaches 0
