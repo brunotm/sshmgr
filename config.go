@@ -59,9 +59,9 @@ func newSSHClientConfig(config *SSHConfig) (*ssh.ClientConfig, error) {
 	}
 
 	return &ssh.ClientConfig{
-		User:    config.User,
-		Auth:    auths,
-		Timeout: time.Duration(config.TimeoutSeconds) * time.Second,
-		// HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		User:            config.User,
+		Auth:            auths,
+		Timeout:         time.Duration(config.TimeoutSeconds) * time.Second,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}, nil
 }
