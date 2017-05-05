@@ -1,11 +1,9 @@
-Go sshmgr
+Go sshmgr [![Go Report Card](https://goreportcard.com/badge/github.com/brunotm/sshmgr)](https://goreportcard.com/report/github.com/brunotm/sshmgr)
 ====
-[![Go Report Card](https://goreportcard.com/badge/github.com/brunotm/sshmgr)](https://goreportcard.com/report/github.com/brunotm/sshmgr)
 
 ### A goroutine safe manager for SSH clients sharing between ssh/sftp sessions.
 
-It makes possible to share and reutilize existing client connections for the same host `made with the same user and port` between multiple sessions and goroutines.</br>
-This is useful when yout application relies on SSH/SFTP for interacting with several hosts and not spawn multiple connections to the same hosts, saving resources on both sides.
+It makes possible to share and reutilize existing client connections for the same host `made with the same user and port` between multiple sessions and goroutines, saving resources on both sides.</br>
 
 Clients are reference counted per session, and automatically closed/removed from the manager when all dependent sessions are closed.
 
