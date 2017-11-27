@@ -2,7 +2,6 @@ package sshmgr
 
 import (
 	"fmt"
-	"io/ioutil"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -19,14 +18,13 @@ type SSHConfig struct {
 	Port           string `json:"port,omitempty"`
 	User           string `json:"ssh_user,omitempty"`
 	Password       string `json:"ssh_password,omitempty"`
-	Key            string `json:"ssh_key,omitempty"`
+	Key            []byte `json:"ssh_key,omitempty"`
 	TimeoutSeconds int    `json:"timeout_seconds,omitempty"`
 }
 
-// NewConfig creates a SSHConfig with the specified parameters
-func NewConfig(netaddr, user, pass, key string) *SSHConfig {
-	return &SSHConfig{
-		netaddr, defaultPort, user, pass, key, defaultTimeoutSeconds}
+// NewConfig creates a SSHConfig with the specified parameters, default port and timeout
+func NewConfig(netaddr, user, pass string, key []byte) *SSHConfig {
+	return &SSHConfig{netaddr, defaultPort, user, pass, key, defaultTimeoutSeconds}
 }
 
 // newSSHClientConfig creates a ssh.ClientConfig from a *SSHConfig
@@ -35,7 +33,7 @@ func newSSHClientConfig(config *SSHConfig) (*ssh.ClientConfig, error) {
 		return nil, fmt.Errorf("Empty username")
 	}
 
-	if config.Password == "" && config.Key == "" {
+	if config.Password == "" && len(config.Key) == 0 {
 		return nil, fmt.Errorf("Empty password and Key")
 	}
 
@@ -45,13 +43,8 @@ func newSSHClientConfig(config *SSHConfig) (*ssh.ClientConfig, error) {
 		auths = append(auths, ssh.Password(config.Password))
 	}
 
-	if config.Key != "" {
-		buffer, err := ioutil.ReadFile(config.Key)
-		if err != nil {
-			return nil, err
-		}
-
-		key, err := ssh.ParsePrivateKey(buffer)
+	if len(config.Key) > 0 {
+		key, err := ssh.ParsePrivateKey(config.Key)
 		if err != nil {
 			return nil, err
 		}
