@@ -1,11 +1,10 @@
+package sshmgr
+
 /*
 Package sshmgr is a goroutine safe manager for SSH clients sharing between ssh/sftp sessions
 
 It makes possible to share and reutilize existing client connections
 for the same host `made with the same user and port` between multiple sessions and goroutines.
-
-This is useful when yout application relies on SSH/SFTP for interacting with several
-hosts and not spawn multiple connections to the same hosts, saving resources on both sides.
 
 Clients are reference counted per session, and automatically closed/removed from the manager when all dependent sessions are closed.
 
@@ -14,11 +13,17 @@ Clients are reference counted per session, and automatically closed/removed from
 		package main
 
 		import (
+			"io/ioutil"
 			"github.com/brunotm/sshmgr"
 		)
 
 		func main() {
-			config := sshmgr.NewConfig("hostA.domain.com", "user", "password", "or_key_file_path")
+			key, err := ioutil.ReadFile("path to key file")
+			if err != nil {
+				panic(err)
+			}
+
+			config := sshmgr.NewConfig("hostA.domain.com", "port", "user", "password", key)
 			sshSession, err := sshmgr.Manager.GetSSHSession(config)
 			if err != nil {
 				panic(err)
@@ -33,7 +38,6 @@ Clients are reference counted per session, and automatically closed/removed from
 			fmt.Printf("%s: %s", config.NetAddr, string(data))
 		}
 */
-package sshmgr
 
 import (
 	"fmt"

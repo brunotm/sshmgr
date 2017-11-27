@@ -1,4 +1,6 @@
-Go sshmgr [![Go Report Card](https://goreportcard.com/badge/github.com/brunotm/sshmgr)](https://goreportcard.com/report/github.com/brunotm/sshmgr)
+# Go sshmgr
+
+[![Build Status](https://travis-ci.org/brunotm/sshmgr.svg?branch=master)](https://travis-ci.org/brunotm/sshmgr) [![Go Report Card](https://goreportcard.com/badge/github.com/brunotm/sshmgr)](https://goreportcard.com/report/github.com/brunotm/sshmgr)
 ====
 
 ### A goroutine safe manager for SSH clients sharing between ssh/sftp sessions.
@@ -18,7 +20,12 @@ import (
 )
 
 func main() {
-	config := sshmgr.NewConfig("hostA.domain.com", "user", "password", "or_key_file_path")
+	key, err := ioutil.ReadFile("path to key file")
+	if err != nil {
+		panic(err)
+	}
+
+	config := sshmgr.NewConfig("hostA.domain.com", "user", "password", key)
 	sshSession, err := sshmgr.Manager.GetSSHSession(config)
 	if err != nil {
 		panic(err)
