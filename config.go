@@ -7,34 +7,40 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-const (
-	defaultPort           = "22"
-	defaultTimeoutSeconds = 5
-)
-
 // SSHConfig type
 type SSHConfig struct {
-	NetAddr        string `json:"netaddr,omitempty"`
-	Port           string `json:"port,omitempty"`
-	User           string `json:"ssh_user,omitempty"`
-	Password       string `json:"ssh_password,omitempty"`
-	Key            []byte `json:"ssh_key,omitempty"`
-	TimeoutSeconds int    `json:"timeout_seconds,omitempty"`
+	name        string
+	NetAddr     string
+	Port        string
+	User        string
+	Password    string
+	Key         []byte
+	DialTimeout time.Duration
+	Deadline    time.Duration
 }
 
 // NewConfig creates a SSHConfig with the specified parameters, default port and timeout
-func NewConfig(netaddr, user, pass string, key []byte) *SSHConfig {
-	return &SSHConfig{netaddr, defaultPort, user, pass, key, defaultTimeoutSeconds}
+func NewConfig(netaddr, port, user, pass string, key []byte, timeout, deadline time.Duration) SSHConfig {
+	return SSHConfig{
+		name:        fmt.Sprintf("%s@%s:%s:%x:%x", user, netaddr, port, pass, key),
+		NetAddr:     netaddr,
+		Port:        port,
+		User:        user,
+		Password:    pass,
+		Key:         key,
+		DialTimeout: timeout,
+		Deadline:    deadline,
+	}
 }
 
-// newSSHClientConfig creates a ssh.ClientConfig from a *SSHConfig
-func newSSHClientConfig(config *SSHConfig) (*ssh.ClientConfig, error) {
+// newSSHClientConfig creates a ssh.ClientConfig from a SSHConfig
+func newSSHClientConfig(config SSHConfig) (*ssh.ClientConfig, error) {
 	if config.User == "" {
-		return nil, fmt.Errorf("Empty username")
+		return nil, fmt.Errorf("empty username")
 	}
 
 	if config.Password == "" && len(config.Key) == 0 {
-		return nil, fmt.Errorf("Empty password and Key")
+		return nil, fmt.Errorf("empty password and Key")
 	}
 
 	var auths []ssh.AuthMethod
@@ -54,7 +60,7 @@ func newSSHClientConfig(config *SSHConfig) (*ssh.ClientConfig, error) {
 	return &ssh.ClientConfig{
 		User:            config.User,
 		Auth:            auths,
-		Timeout:         time.Duration(config.TimeoutSeconds) * time.Second,
+		Timeout:         config.DialTimeout,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}, nil
 }

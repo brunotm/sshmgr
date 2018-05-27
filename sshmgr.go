@@ -42,6 +42,7 @@ Clients are reference counted per session, and automatically closed/removed from
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/brunotm/sshmgr/locker"
 	"github.com/pkg/sftp"
@@ -57,106 +58,109 @@ var Manager *SSHManager
 // SSHManager manage ssh clients and sessions.
 // Clients are reference counted per session and removed from manager when the refcount reaches 0
 type SSHManager struct {
-	mtx     *sync.RWMutex
+	mtx     sync.RWMutex
 	locker  *locker.Locker
 	clients map[string]*sshClient
 }
 
-// addClient adds a client to manager client map
-func (m *SSHManager) addClient(clientName string, client *sshClient) {
-	m.mtx.Lock()
-	defer m.mtx.Unlock()
-	m.clients[clientName] = client
-}
-
-// getClient get a existing client from manager client map
-func (m *SSHManager) getClient(clientName string) *sshClient {
+// getClient an existing client from manager client map
+func (m *SSHManager) getClient(name string) (client *sshClient) {
 	m.mtx.RLock()
-	defer m.mtx.RUnlock()
-	return m.clients[clientName]
+	client = m.clients[name]
+	m.mtx.RUnlock()
+	return client
 }
 
-// GetSSHSession creates a session from a active managed client or create a new one on demand
-func (m *SSHManager) GetSSHSession(config *SSHConfig) (*SSHSession, error) {
-	clientName := fmt.Sprintf("%s@%s:%s", config.User, config.NetAddr, config.Port)
-	m.locker.Lock(clientName)
-	defer m.locker.Unlock(clientName)
+// addClient client to the manager
+func (m *SSHManager) addClient(client *sshClient) {
+	m.mtx.Lock()
+	m.clients[client.config.name] = client
+	m.mtx.Unlock()
+}
 
-	// If a existing client is found try to create a session from it
-	client := m.getClient(clientName)
-	if client != nil {
-		session, err := client.NewSession()
-		if err != nil {
+// delClient an existing client from manager
+func (m *SSHManager) delClient(name string) {
+	m.mtx.Lock()
+	delete(m.clients, name)
+	m.mtx.Unlock()
+}
+
+// GetSSHSession creates a session from an active managed client or create a new one on demand
+func (m *SSHManager) GetSSHSession(config SSHConfig) (session *SSHSession, err error) {
+	m.locker.Lock(config.name)
+	defer m.locker.Unlock(config.name)
+
+	// Get a client for this config
+	var client *sshClient
+	client = m.getClient(config.name)
+	if client == nil {
+		if client, err = newSSHClient(config); err != nil {
 			return nil, err
 		}
-		client.incr()
-		return &SSHSession{clientName: clientName, manager: m, Session: session}, nil
 	}
 
-	// Create a new client and session
-	client, err := newSSHClient(config)
+	// Create a SSH session
+	sess, err := client.NewSession()
 	if err != nil {
 		return nil, err
 	}
 
-	session, err := client.NewSession()
-	if err != nil {
-		return nil, err
-	}
+	// Add the client to the manager
+	// increment the reference count
+	// and set the current deadline
+	m.addClient(client)
 	client.incr()
-	m.addClient(clientName, client)
-
-	return &SSHSession{clientName: clientName, manager: m, Session: session}, nil
+	client.conn.SetDeadline(time.Now().Add(config.Deadline))
+	return &SSHSession{manager: m, Session: sess, client: client}, nil
 }
 
 // GetSFTPSession creates a session from a active managed client or create a new one on demand
-func (m *SSHManager) GetSFTPSession(config *SSHConfig) (*SFTPSession, error) {
-	clientName := fmt.Sprintf("%s@%s:%s", config.User, config.NetAddr, config.Port)
-	m.locker.Lock(clientName)
-	defer m.locker.Unlock(clientName)
+func (m *SSHManager) GetSFTPSession(config SSHConfig) (session *SFTPSession, err error) {
+	m.locker.Lock(config.name)
+	defer m.locker.Unlock(config.name)
 
-	// If a existing client is found try to create a session from it
-	client := m.getClient(clientName)
-	if client != nil {
-		session, err := sftp.NewClient(client.Client)
-		if err != nil {
+	// Get a client for this config
+	var client *sshClient
+	client = m.getClient(config.name)
+	if client == nil {
+		if client, err = newSSHClient(config); err != nil {
 			return nil, err
 		}
-		client.incr()
-		return &SFTPSession{clientName: clientName, manager: m, Client: session}, nil
 	}
 
-	// Create a new client and session
-	client, err := newSSHClient(config)
+	// Create a SFTP session
+	sftpClient, err := sftp.NewClient(client.Client)
 	if err != nil {
 		return nil, err
 	}
 
-	session, err := sftp.NewClient(client.Client)
-	if err != nil {
-		return nil, err
-	}
+	// Add the client to the manager
+	// increment the reference count
+	// and set the current deadline
+	m.addClient(client)
 	client.incr()
-	m.addClient(clientName, client)
-
-	return &SFTPSession{clientName: clientName, manager: m, Client: session}, nil
+	client.conn.SetDeadline(time.Now().Add(config.Deadline))
+	return &SFTPSession{manager: m, Client: sftpClient, client: client}, nil
 }
 
-func (m *SSHManager) notifySessionClose(clientName string) {
-	m.locker.Lock(clientName)
-	defer m.locker.Unlock(clientName)
+// notifySessionClose notifies the manager about the closing of a session
+func (m *SSHManager) notifySessionClose(client *sshClient) {
+	m.locker.Lock(client.config.name)
+	defer m.locker.Unlock(client.config.name)
 
-	client := m.getClient(clientName)
+	m.mtx.RLock()
+	managedClient := m.clients[client.config.name]
+	m.mtx.RUnlock()
 
-	if client == nil {
+	if managedClient == nil || client != managedClient {
 		// We should never get here
-		panic(fmt.Sprintf("Client not found: %s", clientName))
+		panic(fmt.Sprintf("client not found in manager after close: %s", client.config.name))
 	}
 
 	if client.decr() == 0 {
 		defer client.Close()
 		m.mtx.Lock()
-		delete(m.clients, clientName)
+		delete(m.clients, client.config.name)
 		m.mtx.Unlock()
 
 	}
@@ -164,5 +168,5 @@ func (m *SSHManager) notifySessionClose(clientName string) {
 
 // NewManager creates a new SSHManager
 func NewManager() *SSHManager {
-	return &SSHManager{&sync.RWMutex{}, locker.New(), map[string]*sshClient{}}
+	return &SSHManager{sync.RWMutex{}, locker.New(), map[string]*sshClient{}}
 }

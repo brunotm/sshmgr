@@ -1,7 +1,7 @@
 package sshmgr
 
 import (
-	"fmt"
+	"net"
 	"sync/atomic"
 
 	"golang.org/x/crypto/ssh"
@@ -9,7 +9,9 @@ import (
 
 type sshClient struct {
 	*ssh.Client
-	refs int32
+	config SSHConfig
+	conn   net.Conn
+	refs   int32
 }
 
 func (c *sshClient) incr() int32 {
@@ -20,16 +22,26 @@ func (c *sshClient) decr() int32 {
 	return atomic.AddInt32(&c.refs, -1)
 }
 
-// NewSSHClient creates a new ssh.Client from the given config
-func newSSHClient(config *SSHConfig) (*sshClient, error) {
+// newSSHClient creates a new ssh.Client from the given config
+func newSSHClient(config SSHConfig) (*sshClient, error) {
+	addr := config.NetAddr + ":" + config.Port
 	sshConfig, err := newSSHClientConfig(config)
 	if err != nil {
 		return nil, err
 	}
 
-	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", config.NetAddr, config.Port), sshConfig)
+	conn, err := net.DialTimeout("tcp", addr, config.DialTimeout)
 	if err != nil {
 		return nil, err
 	}
-	return &sshClient{Client: client}, nil
+	c, chans, reqs, err := ssh.NewClientConn(conn, addr, sshConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	sshClient := &sshClient{}
+	sshClient.config = config
+	sshClient.conn = conn
+	sshClient.Client = ssh.NewClient(c, chans, reqs)
+	return sshClient, nil
 }
