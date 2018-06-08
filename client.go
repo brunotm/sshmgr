@@ -24,6 +24,9 @@ func (c *sshClient) decr() int32 {
 
 // newSSHClient creates a new ssh.Client from the given config
 func newSSHClient(config SSHConfig) (*sshClient, error) {
+	if config.Port == "" {
+		config.Port = "22"
+	}
 	addr := config.NetAddr + ":" + config.Port
 	sshConfig, err := newSSHClientConfig(config)
 	if err != nil {
