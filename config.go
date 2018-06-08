@@ -57,10 +57,19 @@ func newSSHClientConfig(config SSHConfig) (*ssh.ClientConfig, error) {
 		auths = append(auths, ssh.PublicKeys(key))
 	}
 
-	return &ssh.ClientConfig{
-		User:            config.User,
-		Auth:            auths,
-		Timeout:         config.DialTimeout,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	}, nil
+	clientConfig := &ssh.ClientConfig{}
+	clientConfig.SetDefaults()
+	clientConfig.User = config.User
+	clientConfig.Auth = auths
+	clientConfig.Timeout = config.DialTimeout
+	clientConfig.HostKeyCallback = ssh.InsecureIgnoreHostKey()
+
+	// Reverse order of available ciphers to prevent early failure in negotiation
+	// with older ssh server versions
+	for i := len(clientConfig.Ciphers)/2 - 1; i >= 0; i-- {
+		opp := len(clientConfig.Ciphers) - 1 - i
+		clientConfig.Ciphers[i], clientConfig.Ciphers[opp] = clientConfig.Ciphers[opp], clientConfig.Ciphers[i]
+	}
+
+	return clientConfig, nil
 }
