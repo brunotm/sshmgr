@@ -16,8 +16,8 @@
 [[projects]]
   name = "github.com/pkg/sftp"
   packages = ["."]
-  revision = "d2aa419835609d317c34baae11bc345d1f9971a7"
-  version = "1.7.0"
+  revision = "57673e38ea946592a59c26592b7e6fbda646975b"
+  version = "1.8.0"
 
 [[projects]]
   branch = "master"
